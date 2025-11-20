@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { User, userRegisterSchema } from "./models/UserModel.js";
 import bcrypt from "bcryptjs";
+import { authMiddleware } from "./middlewares/AuthMiddleware.js";
 
 const app = express();
 app.use(express.json());
@@ -48,8 +49,33 @@ app.post("/api/v1/signup", async (req, res) => {
          res.status(500).json({message: "an error has occured", error: error})
     }
 });
-app.post("/api/v1/login", (req, res) => {
+app.post("/api/v1/login", async (req, res) => {
+     const parsed = userRegisterSchema.safeParse(req.body);
 
+    if (!parsed.success) {
+        return res.status(400).json({
+            message: "Validation failed",
+            errors: parsed.error.flatten().fieldErrors
+        });
+    }
+    const { username, password } = parsed.data;
+    try {
+        if (!username || !password) {
+            return res.status(400).json({ message: "Username and password are required" });
+        }       
+        const user = await User.findOne({username});
+        if (!user) {
+            return res.status(400).json({ message: "No User found with the entered username, Please Sign Up" });
+        }
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ message: "Invalid password" });
+        }
+        res.status(200).json({ message: "Login Successful" });
+    } catch (error) {
+        console.error(error);
+         res.status(500).json({message: "an error has occured", error: error})
+    }   
 });
 app.post("/api/v1/content", (req, res) => {
 
