@@ -7,9 +7,11 @@ import { authMiddleware } from "./middlewares/AuthMiddleware.js";
 import { Content } from "./models/ContentModel.js";
 import connection from "./db.js";
 import { Tags } from "./models/TagsModel.js";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 const secret = process.env.JWT_SECRET
 
 const hashPassword = async (password: string) => {
