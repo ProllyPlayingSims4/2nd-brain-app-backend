@@ -10,7 +10,7 @@ enum type {
 }
 
 const ContentSchema = new Schema({
-    Link: {
+    link: {
         type: String, 
         required: true,
     },
@@ -25,12 +25,12 @@ const ContentSchema = new Schema({
     },
     userId: {
         type: Schema.Types.ObjectId,
-        ref: User,
+        ref: "User",
     },
-    tags: {
+    tags: [{
         type: Schema.Types.ObjectId,
-        ref: Tags
-    }
+        ref: "tags"
+    }]
 });
 
 export const Content = model('Content', ContentSchema);

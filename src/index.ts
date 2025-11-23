@@ -4,12 +4,17 @@ import jwt from "jsonwebtoken";
 import { User, userRegisterSchema } from "./models/UserModel.js";
 import bcrypt from "bcryptjs";
 import { authMiddleware } from "./middlewares/AuthMiddleware.js";
+import { Content } from "./models/ContentModel.js";
+import connection from "./db.js";
+import { Tags } from "./models/TagsModel.js";
 
 const app = express();
 app.use(express.json());
+const secret = process.env.JWT_SECRET
 
-const hashPassword = async (password: string) =>{
-    await bcrypt.hash(password, 10)
+const hashPassword = async (password: string) => {
+    const hashed = await bcrypt.hash(password, 10);
+    return hashed;
 };
 
 app.post("/api/v1/signup", async (req, res) => {
@@ -26,31 +31,33 @@ app.post("/api/v1/signup", async (req, res) => {
     // If validation passes, Zod gives you safe data:
     const { username, password } = parsed.data;
     //const { username, password } = req.body;
-    
+
     try {
         if (!username || !password) {
             return res.status(400).json({ message: "Username and password are required" });
         }
 
-        const existingUser = await User.findOne({username});
+        const existingUser = await User.findOne({ username });
         if (existingUser) {
             res.status(400).json({ message: "User already exists please Login" });
         }
         const hashedPassword = await hashPassword(password);
 
-        await User.create({
+        const newUser = await User.create({
             username,
             password: hashedPassword
-        });
-        res.status(201).json({message: "User Signed Up Successfully"})
-    } 
+        })
+        const token = jwt.sign({ id: newUser._id }, secret!);
+        res.status(201).json({ message: "User Signed Up Successfully", token: token })
+    }
     catch (error) {
         console.error(error);
-         res.status(500).json({message: "an error has occured", error: error})
+        res.status(500).json({ message: "an error has occured", error: error })
     }
 });
+
 app.post("/api/v1/login", async (req, res) => {
-     const parsed = userRegisterSchema.safeParse(req.body);
+    const parsed = userRegisterSchema.safeParse(req.body);
 
     if (!parsed.success) {
         return res.status(400).json({
@@ -62,8 +69,8 @@ app.post("/api/v1/login", async (req, res) => {
     try {
         if (!username || !password) {
             return res.status(400).json({ message: "Username and password are required" });
-        }       
-        const user = await User.findOne({username});
+        }
+        const user = await User.findOne({ username });
         if (!user) {
             return res.status(400).json({ message: "No User found with the entered username, Please Sign Up" });
         }
@@ -71,28 +78,83 @@ app.post("/api/v1/login", async (req, res) => {
         if (!isPasswordValid) {
             return res.status(400).json({ message: "Invalid password" });
         }
-        res.status(200).json({ message: "Login Successful" });
+        const token = jwt.sign({
+            id: user._id
+        }, secret!)
+        res.status(200).json({ message: "Login Successful", token: token });
     } catch (error) {
         console.error(error);
-         res.status(500).json({message: "an error has occured", error: error})
-    }   
-});
-app.post("/api/v1/content", (req, res) => {
-
-});
-app.get("/api/v1/content", (req, res) => {
-
-});
-app.delete("/api/v1/content", (req, res) => {
-
-});
-app.post("/api/v1/brain/share", (req, res) => {
-
-});
-app.get("/api/v1/brain/:shareLink", (req, res) => {
-
+        res.status(500).json({ message: "an error has occured", error: error })
+    }
 });
 
-app.listen(8000, () => {
-    console.log("Server has been started on the PORT: 8000")
+app.post("/api/v1/content", authMiddleware, async (req, res) => {
+    const { link, type, title, tags = [] } = req.body;
+    //@ts-ignore
+    const userId = req.user.id;
+    try {
+        //first find out if the entered tags already exist or not
+        const tagsId = [];
+        for (const tagsTitle of tags) {
+            let existingTags = await Tags.findOne({ title: tagsTitle.trim().toLowerCase() });
+            if (!existingTags) {
+                existingTags = await Tags.create({
+                    title: tagsTitle.trim().toLowerCase()
+                });
+            }
+            tagsId.push(existingTags._id);
+        }
+        
+        const content = await Content.create({
+            link,
+            type,
+            title,
+            userId,
+            tags: tagsId
+        });
+        res.status(200).json({ message: "The content has been created", content: content });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: "there is an error while creating content", error: e })
+    }
+
 });
+
+app.get("/api/v1/content", authMiddleware, async (req, res) => {
+    try {
+        // @ts-ignore
+        const userId = req.user.id;
+        const content = await Content.find({ userId: userId }).populate("userId", "username").populate("tags", "title");
+        res.status(200).json({ message: "got the conntent successfully", content: content });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: "there is an error while getting the content", error: e })
+    }
+});
+
+app.delete("/api/v1/content", authMiddleware, async (req, res) => {
+    //@ts-ignore
+    const userId = req.user.id;
+    const id = req.body.id;
+    try {
+        const isDeleted = await Content.findByIdAndDelete({ _id: id, userId: userId });
+        res.status(200).json({ message: "requested content has been deleted", deleted: isDeleted })
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: "there is an error while deleting", error: e })
+    }
+
+});
+
+app.post("/api/v1/brain/share", authMiddleware, (req, res) => {
+
+});
+app.get("/api/v1/brain/:shareLink", authMiddleware, (req, res) => {
+
+});
+
+if (connection) {
+    app.listen(3000);
+    console.log('app is listening on the PORT: 3000')
+}
