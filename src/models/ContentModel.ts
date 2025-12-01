@@ -30,7 +30,11 @@ const ContentSchema = new Schema({
     tags: [{
         type: Schema.Types.ObjectId,
         ref: "tags"
-    }]
+    }],
+    createdAt: {
+        type: Date,
+        default: Date.now,
+    }
 });
 
 export const Content = model('Content', ContentSchema);
