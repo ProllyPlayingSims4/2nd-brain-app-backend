@@ -26,6 +26,7 @@ const ContentSchema = new Schema({
     userId: {
         type: Schema.Types.ObjectId,
         ref: "User",
+        required: true
     },
     tags: [{
         type: Schema.Types.ObjectId,

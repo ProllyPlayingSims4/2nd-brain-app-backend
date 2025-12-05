@@ -8,6 +8,8 @@ import { Content } from "./models/ContentModel.js";
 import connection from "./db.js";
 import { Tags } from "./models/TagsModel.js";
 import cors from "cors";
+import { Link } from "./models/LinkModel.js";
+import { Random } from "./utils.js";
 
 const app = express();
 app.use(express.json());
@@ -106,7 +108,7 @@ app.post("/api/v1/content", authMiddleware, async (req, res) => {
             }
             tagsId.push(existingTags._id);
         }
-        
+
         const content = await Content.create({
             link,
             type,
@@ -149,14 +151,58 @@ app.delete("/api/v1/content", authMiddleware, async (req, res) => {
 
 });
 
-app.post("/api/v1/brain/share", authMiddleware, (req, res) => {
+app.post("/api/v1/brain/share", authMiddleware, async (req, res) => {
+    const { share } = req.body;
+    try {
+        if (share) {
+            const ifexisting = await Link.findOne({
+                //@ts-ignore
+                userId: req.user.id
+            });
+            if(ifexisting){
+                res.status(200).json({message: "Link already exist", Link: ifexisting.hash});
+                return;
+            }
+           const NewLink = await Link.create({
+                //@ts-ignore
+                userId: req.user.id,
+                hash: Random(10)
+            });
+            res.status(200).json({ message: "Shareable Link Created Successfully", Link: NewLink.hash});
+        } else {
+            await Link.deleteOne({
+                //@ts-ignore
+                userId: req.user.id
+            });
+            res.status(200).json({message: "Link Deleted Successfully"})
+        }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: "there is an error", error: e })
+    }
 
 });
-app.get("/api/v1/brain/:shareLink", authMiddleware, (req, res) => {
-
+app.get("/api/v1/brain/:shareLink", authMiddleware, async (req, res) => {
+    const shareLink = req.params.shareLink;
+    try {
+        const findHash = await Link.findOne({
+            hash: shareLink
+        });
+        if (!findHash) {
+            res.status(411).json({ message: "Incorrect Url" })
+            return;
+        }
+        const content = await Content.find({
+            userId: findHash.userId
+        }).populate("userId", "username").populate("tags", "title");
+        res.status(200).json({ message: "here is the brain", content: content })
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: "some error occured", error: e })
+    } 
 });
 
 if (connection) {
     app.listen(3000);
-    console.log('app is listening on the PORT: 3000')
+    console.log('app is listening on the PORT: 3000');
 }
